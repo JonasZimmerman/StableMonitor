@@ -1,0 +1,3 @@
+# This directory contains auto-generated ABI files
+# Run 'npm run genabi' in the frontend directory to generate these files
+
