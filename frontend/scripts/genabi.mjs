@@ -1,4 +1,3 @@
-import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -20,77 +19,98 @@ const dirname = path.basename(dir);
 const line =
   "\n===================================================================\n";
 
-if (!fs.existsSync(dir)) {
-  console.error(
-    `${line}Unable to locate ${rel}. Expecting <root>/backend${line}`
-  );
-  process.exit(1);
-}
-
-if (!fs.existsSync(outdir)) {
-  console.error(`${line}Unable to locate ${outdir}.${line}`);
-  process.exit(1);
-}
-
 const deploymentsDir = path.join(dir, "deployments");
 
-function readDeployment(chainName, chainId, contractName, optional) {
-  const chainDeploymentDir = path.join(deploymentsDir, chainName);
-
-  if (!fs.existsSync(chainDeploymentDir)) {
-    if (!optional) {
-      console.error(
-        `${line}Unable to locate '${chainDeploymentDir}' directory.\n\n1. Goto '${dirname}' directory\n2. Run 'npx hardhat deploy --network ${chainName}'.${line}`
-      );
-      process.exit(1);
-    }
-    console.log(`Skipping ${chainName} (${chainId}): deployment not found`);
-    return undefined;
+function isDirectory(p) {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
   }
+}
 
-  const deploymentFile = path.join(chainDeploymentDir, `${contractName}.json`);
-  if (!fs.existsSync(deploymentFile)) {
-    if (!optional) {
-      console.error(
-        `${line}Unable to locate '${deploymentFile}' file.\n\n1. Goto '${dirname}' directory\n2. Run 'npx hardhat deploy --network ${chainName}'.${line}`
-      );
-      process.exit(1);
-    }
-    console.log(`Skipping ${chainName} (${chainId}): contract deployment not found`);
-    return undefined;
+const wellKnownChainIds = {
+  localhost: 31337,
+  hardhat: 31337,
+  anvil: 31337,
+  sepolia: 11155111,
+  homestead: 1,
+  mainnet: 1,
+  polygon: 137,
+  mumbai: 80001,
+  base: 8453,
+  optimism: 10,
+  arbitrum: 42161,
+};
+
+function detectChainId(chainDir, chainName, parsedDeployment) {
+  const chainIdFile = path.join(chainDir, ".chainId");
+  if (fs.existsSync(chainIdFile)) {
+    const content = fs.readFileSync(chainIdFile, "utf-8").trim();
+    const n = Number.parseInt(content, 10);
+    if (!Number.isNaN(n) && n > 0) return n;
   }
-
-  const jsonString = fs.readFileSync(deploymentFile, "utf-8");
-  const obj = JSON.parse(jsonString);
-  obj.chainId = chainId;
-
-  return obj;
+  if (parsedDeployment && typeof parsedDeployment.chainId === "number") {
+    return parsedDeployment.chainId;
+  }
+  if (Object.hasOwn(wellKnownChainIds, chainName)) {
+    return wellKnownChainIds[chainName];
+  }
+  return undefined;
 }
 
-// Auto deployed on localhost
-const deployLocalhost = readDeployment("localhost", 31337, CONTRACT_NAME, false /* optional */);
+function collectDeployments() {
+  const deployments = [];
+  if (!fs.existsSync(deploymentsDir) || !isDirectory(deploymentsDir)) {
+    console.log(
+      `${line}Deployments directory not found. Skipping ABI generation.${line}`
+    );
+    return deployments;
+  }
+  const chainNames = fs
+    .readdirSync(deploymentsDir)
+    .filter((n) => isDirectory(path.join(deploymentsDir, n)));
 
-// Sepolia is optional - automatically skip if not deployed
-const deploySepolia = readDeployment("sepolia", 11155111, CONTRACT_NAME, true /* optional */);
+  for (const chainName of chainNames) {
+    const chainDir = path.join(deploymentsDir, chainName);
+    const deploymentFile = path.join(chainDir, `${CONTRACT_NAME}.json`);
+    if (!fs.existsSync(deploymentFile)) {
+      console.log(
+        `Skipping ${chainName}: ${CONTRACT_NAME}.json not found`
+      );
+      continue;
+    }
+    try {
+      const jsonString = fs.readFileSync(deploymentFile, "utf-8");
+      const parsed = JSON.parse(jsonString);
+      const chainId = detectChainId(chainDir, chainName, parsed);
+      if (typeof chainId !== "number") {
+        console.log(
+          `Skipping ${chainName}: unable to determine chainId`
+        );
+        continue;
+      }
+      if (!parsed.address || !parsed.abi) {
+        console.log(
+          `Skipping ${chainName}: invalid deployment (missing address or abi)`
+        );
+        continue;
+      }
+      deployments.push({
+        chainId,
+        chainName,
+        address: parsed.address,
+        abi: parsed.abi,
+      });
+    } catch (e) {
+      console.log(`Skipping ${chainName}: failed to parse deployment JSON`);
+      continue;
+    }
+  }
+  return deployments;
+}
 
-// Collect all deployments
-const deployments = [];
-if (deployLocalhost) {
-  deployments.push({
-    chainId: 31337,
-    chainName: "hardhat",
-    address: deployLocalhost.address,
-    abi: deployLocalhost.abi
-  });
-}
-if (deploySepolia) {
-  deployments.push({
-    chainId: 11155111,
-    chainName: "sepolia",
-    address: deploySepolia.address,
-    abi: deploySepolia.abi
-  });
-}
+const deployments = collectDeployments();
 
 // Verify ABI consistency across all deployments
 if (deployments.length > 1) {
@@ -105,9 +125,13 @@ if (deployments.length > 1) {
   }
 }
 
+if (deployments.length === 0) {
+  console.log(`${line}No deployments found. Nothing to generate.${line}`);
+  process.exit(0);
+}
 
 // Use the first deployment's ABI (all should be the same after verification)
-const abi = deployments.length > 0 ? deployments[0].abi : deployLocalhost.abi;
+const abi = deployments[0].abi;
 
 const tsCode = `
 /*
