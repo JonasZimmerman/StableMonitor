@@ -283,8 +283,13 @@ export const createFhevmInstance = async (parameters: {
   }
 
   const relayerSDK = (window as unknown as FhevmWindowType).relayerSDK;
+  // Support both SDK shapes: prefer ZamaEthereumConfig, fallback to SepoliaConfig
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const networkConfig = (relayerSDK as any).ZamaEthereumConfig ??
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (relayerSDK as any).SepoliaConfig;
 
-  const aclAddress = relayerSDK.SepoliaConfig.aclContractAddress;
+  const aclAddress = networkConfig.aclContractAddress;
   if (!checkIsAddress(aclAddress)) {
     throw new Error(`Invalid address: ${aclAddress}`);
   }
@@ -293,7 +298,7 @@ export const createFhevmInstance = async (parameters: {
   throwIfAborted();
 
   const config: FhevmInstanceConfig = {
-    ...relayerSDK.SepoliaConfig,
+    ...networkConfig,
     network: providerOrUrl,
     publicKey: pub.publicKey,
     publicParams: pub.publicParams,

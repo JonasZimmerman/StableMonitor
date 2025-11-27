@@ -2,12 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint32, externalEuint32, ebool} from "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /// @title StableMonitor - Encrypted Stablecoin Monitoring System
 /// @notice A contract for managing encrypted stablecoin issuance, transfers, and risk monitoring
 /// @dev All balances and amounts are encrypted using FHEVM technology
-contract StableMonitor is SepoliaConfig {
+contract StableMonitor is ZamaEthereumConfig {
     // Mapping from user address to encrypted balance
     mapping(address => euint32) private _balances;
     
