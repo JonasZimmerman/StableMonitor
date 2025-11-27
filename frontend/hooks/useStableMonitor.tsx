@@ -1,5 +1,7 @@
 "use client";
 
+// Resubmitted: no functional changes.
+
 import { ethers } from "ethers";
 import {
   RefObject,
@@ -316,7 +318,8 @@ export const useStableMonitor = (parameters: {
         }
 
         // Get decrypted value and handle uint32 overflow (negative numbers)
-        let decryptedValue = res[thisBalanceHandle];
+      const thisBalanceHandleHex = thisBalanceHandle as `0x${string}`;
+      let decryptedValue = res[thisBalanceHandleHex];
         
         // If value is large (likely uint32 overflow from negative), convert to signed int32
         if (typeof decryptedValue === 'bigint' || typeof decryptedValue === 'number') {
@@ -413,8 +416,9 @@ export const useStableMonitor = (parameters: {
           return;
         }
 
+        const handleHex = handle as `0x${string}`;
         const res = await instance.userDecrypt(
-          [{ handle, contractAddress: thisContractAddress }],
+          [{ handle: handleHex, contractAddress: thisContractAddress }],
           sig.privateKey,
           sig.publicKey,
           sig.signature,
@@ -424,7 +428,7 @@ export const useStableMonitor = (parameters: {
           sig.durationDays
         );
 
-        setClearRiskThreshold({ handle, clear: res[handle] });
+        setClearRiskThreshold({ handle, clear: res[handleHex] });
         setMessage("Risk threshold decrypted");
       } catch (e: any) {
         setMessage(`Decrypt risk threshold failed: ${e.message || e}`);
@@ -718,8 +722,9 @@ export const useStableMonitor = (parameters: {
             );
 
           if (sig) {
+            const riskHandleHex = riskHandle as `0x${string}`;
             const res = await instance.userDecrypt(
-              [{ handle: riskHandle, contractAddress: thisContractAddress }],
+              [{ handle: riskHandleHex, contractAddress: thisContractAddress }],
               sig.privateKey,
               sig.publicKey,
               sig.signature,
@@ -729,8 +734,8 @@ export const useStableMonitor = (parameters: {
               sig.durationDays
             );
 
-            setClearRiskFlag({ handle: riskHandle, clear: res[riskHandle] });
-            setMessage(`Risk check completed: ${res[riskHandle] ? "RISK DETECTED" : "SAFE"}`);
+            setClearRiskFlag({ handle: riskHandle, clear: res[riskHandleHex] });
+            setMessage(`Risk check completed: ${res[riskHandleHex] ? "RISK DETECTED" : "SAFE"}`);
           }
         } catch (e: any) {
           setMessage(`Risk check failed: ${e.message || e}`);
